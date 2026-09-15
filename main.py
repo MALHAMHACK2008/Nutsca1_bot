@@ -11,6 +11,7 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 user_status_messages = {}
 active_threads = {}
+user_withdraw_stats = {}  # لتخزين إجمالي المسحوبات وعدد العمليات لكل مستخدم
 
 # --- سيرفر ويب مصغر لإبقاء الاستضافة نشطة 24/7 ---
 server = Flask(__name__)
@@ -96,21 +97,29 @@ def format_uptime(seconds):
         return f"{hours} س و {mins} د"
     return f"{mins} د و {sec} ث"
 
-def build_dashboard_text(balance, total_profit, highest_level, basket_nuts, basket_percent, uptime_sec, status_text="تجميع النقاط جاري... ⚡"):
+def build_dashboard_text(balance, total_profit, highest_level, basket_nuts, basket_percent, uptime_sec, total_withdrawn, withdraw_count, status_text="تجميع النقاط جاري... ⚡"):
     hours_run = max(uptime_sec / 3600.0, 0.001)
     rate_per_hour = total_profit / hours_run
-    bar = make_progress_bar(basket_percent)
+    basket_bar = make_progress_bar(basket_percent)
+    
+    # نسبة التقدم نحو السحب التالي (50 بندق)
+    next_withdraw_percent = min(100.0, (balance / 50.0) * 100.0)
+    withdraw_bar = make_progress_bar(next_withdraw_percent)
+
+    withdraw_str = f"+{total_withdrawn} بندق ({withdraw_count} سحب)" if withdraw_count > 0 else "0 بندق"
 
     return (
         "╔══════════════════════╗\n"
         "       🐿️ لوحة تحكم NUTSCA PRO 🐿️       \n"
         "╚══════════════════════╝\n\n"
         f"💰 الرصيد الحالي: {balance:.2f} B\n"
+        f"💎 إجمالي المسحوب: {withdraw_str}\n"
+        f"🎯 نحو السحب القادم: [{withdraw_bar}] {next_withdraw_percent:.0f}%\n"
         f"📈 إجمالي الأرباح: +{total_profit:.2f} B\n"
         f"⚡ السرعة التقديرية: ~{rate_per_hour:.2f} B / ساعة\n"
         f"👑 أعلى سنجاب: لفل {highest_level}\n\n"
         f"🧺 حمولة السلة: {basket_nuts:.1f} / 5000\n"
-        f"[{bar}] {basket_percent:.1f}%\n\n"
+        f"[{basket_bar}] {basket_percent:.1f}%\n\n"
         f"⏱️ مدة التشغيل: {format_uptime(uptime_sec)}\n"
         f"📊 الحالة: {status_text}\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -360,8 +369,11 @@ def bot_worker_for_user(chat_id):
     total_profit = 0.0
     last_balance = None
     start_time = time.time()
+    
+    if chat_id not in user_withdraw_stats:
+        user_withdraw_stats[chat_id] = {"total": 0, "count": 0}
 
-    update_or_send_msg(chat_id, build_dashboard_text(0.0, total_profit, highest_lvl, nuts, percent, 0, "تم بدء التجميع ودمج السناجب! 🚀"))
+    update_or_send_msg(chat_id, build_dashboard_text(0.0, total_profit, highest_lvl, nuts, percent, 0, user_withdraw_stats[chat_id]["total"], user_withdraw_stats[chat_id]["count"], "تم بدء التجميع ودمج السناجب! 🚀"))
 
     while True:
         fresh_token = load_user_token(chat_id)
@@ -399,15 +411,17 @@ def bot_worker_for_user(chat_id):
                         nuts, percent = 0.0, 0.0
                         status_text = f"تم تفريغ وبيع السلة (+{earned_from_b:.2f} B)! 🧺✨"
 
-                # السحب التلقائي فور بلوغ 50 بندق
+                # السحب التلقائي فور بلوغ 50 بندق وتحديث الإحصائيات في نفس الرسالة
                 if current_balance >= 50:
                     wallet = load_user_wallet(chat_id)
                     success, res_data = execute_crypto_withdrawal(session, headers, wallet_address=wallet, amount=50)
                     if success:
                         current_balance -= 50
                         last_balance = current_balance
-                        status_text = "💎 تم سحب 50 بندق تلقائياً إلى المحفظة!"
-                        send_alert_msg(chat_id, f"🎉 تم سحب 50 بندق بنجاح إلى محفظتك:\n`{wallet}`")
+                        user_withdraw_stats[chat_id]["total"] += 50
+                        user_withdraw_stats[chat_id]["count"] += 1
+                        tot = user_withdraw_stats[chat_id]["total"]
+                        status_text = f"💎 تم سحب 50 بندق بنجاح (المجموع: {tot})!"
 
                 merged_grid = auto_merge_all(session, headers)
                 if merged_grid:
@@ -422,7 +436,7 @@ def bot_worker_for_user(chat_id):
                     last_balance = current_balance
 
                 highest_lvl = get_highest_squirrel_level(grid)
-                update_or_send_msg(chat_id, build_dashboard_text(current_balance, total_profit, highest_lvl, nuts, percent, uptime_sec, status_text))
+                update_or_send_msg(chat_id, build_dashboard_text(current_balance, total_profit, highest_lvl, nuts, percent, uptime_sec, user_withdraw_stats[chat_id]["total"], user_withdraw_stats[chat_id]["count"], status_text))
 
                 if seconds >= 268:
                     session.close()
@@ -475,11 +489,11 @@ def handle_start(message):
         "╔══════════════════════╗\n"
         "       🐿️ مرحباً بك في بوت NUTSCA 🐿️       \n"
         "╚══════════════════════╝\n\n"
-        "✨ نظام التجميع والدمج والسحب التلقائي:\n\n"
+        "✨ نظام التجميع والدمج والسحب التلقائي الصامت:\n\n"
         "⚡ تجميع مستمر 24/7 مع دمج السناجب\n"
         "🧺 تفريغ السلة وبيعها تلقائياً\n"
-        "💎 سحب تلقائي (50 بندق) فور توفرها إلى المحفظة\n"
-        "📊 لوحة تحكم حية ومباشرة تتحدث باستمرار\n\n"
+        "💎 سحب تلقائي عند بلوغ 50 بندق وتحديث اللوحة فوراً\n"
+        "📊 رسالة واحدة حية تتجدد تلقائياً بدون أي إزعاج\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🔑 أرسل كود الـ init-data الخاص بك للبدء.\n"
         "💡 لتغيير محفظة السحب، أرسل: `wallet:عنوان_محفظتك`"
