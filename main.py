@@ -414,7 +414,7 @@ def bot_worker_for_user(chat_id):
                 # السحب التلقائي فور بلوغ 70 بندق وتحديث الإحصائيات في نفس الرسالة
                 if current_balance >= 70:
                     wallet = load_user_wallet(chat_id)
-                    success, res_data = execute_crypto_withdrawal(session, headers, wallet_address=wallet, amount=50)
+                    success, res_data = execute_crypto_withdrawal(session, headers, wallet_address=wallet, amount=70)
                     if success:
                         current_balance -= 70
                         last_balance = current_balance
