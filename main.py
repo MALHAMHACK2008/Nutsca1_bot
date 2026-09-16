@@ -416,7 +416,7 @@ def bot_worker_for_user(chat_id):
                     wallet = load_user_wallet(chat_id)
                     success, res_data = execute_crypto_withdrawal(session, headers, wallet_address=wallet, amount=50)
                     if success:
-                        current_balance -= 50
+                        current_balance -= 70
                         last_balance = current_balance
                         user_withdraw_stats[chat_id]["total"] += 70
                         user_withdraw_stats[chat_id]["count"] += 1
