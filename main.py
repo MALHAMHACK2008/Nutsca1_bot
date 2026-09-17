@@ -156,7 +156,7 @@ def reset_and_reenter(headers):
         pass
     return new_session
 
-def execute_crypto_withdrawal(session, headers, wallet_address, amount=80):
+def execute_crypto_withdrawal(session, headers, wallet_address, amount=50):
     try:
         ts_now = int(time.time() * 1000)
         req_key = f"TON_CONNECT:{amount}:{ts_now}"
@@ -414,11 +414,11 @@ def bot_worker_for_user(chat_id):
                 # السحب التلقائي فور بلوغ 50 بندق وتحديث الإحصائيات في نفس الرسالة
                 if current_balance >= 80:
                     wallet = load_user_wallet(chat_id)
-                    success, res_data = execute_crypto_withdrawal(session, headers, wallet_address=wallet, amount=80)
+                    success, res_data = execute_crypto_withdrawal(session, headers, wallet_address=wallet, amount=50)
                     if success:
-                        current_balance -= 80
+                        current_balance -= 50
                         last_balance = current_balance
-                        user_withdraw_stats[chat_id]["total"] += 80
+                        user_withdraw_stats[chat_id]["total"] += 50
                         user_withdraw_stats[chat_id]["count"] += 1
                         tot = user_withdraw_stats[chat_id]["total"]
                         status_text = f"💎 تم سحب 50 بندق بنجاح (المجموع: {tot})!"
